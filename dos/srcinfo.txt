@@ -1,0 +1,29 @@
+USAGE Restrictions
+
+The code contained in this archive with the exception of ceratin procedures at noted
+points is copyrighted by TyRaNiD (c) 2000. It is not to be used for commercial gain
+or reused publically without recieving my consent.
+
+You can use this code in derivative works etc as long as I am given credit for
+any code contained in your program, and you contact me for permission relating to its
+use.
+
+If you want to continue the project then contact me for more infomation.
+
+Source requirements.
+
+Program is compiled using DJGPP ver 2.01. Just type make in the directory this was 
+extracted to.
+
+Source for the boot code is contained in the \bootcode directory. This can be assembled
+using gcc binutils compiled for a super h target. Modify the m.bat file to use your
+version of 'as' and 'ld' as appropriate.
+
+Ive inclued a text file called ssdebug_wp.txt. this was a text file i wrote up to discuss
+the idea of the debugger with my mate dus. It gives some infomation regarding how the 
+debugger work for ppl who want to know.
+
+TyRaNiD (James Forshaw)
+
+TyRaNiD@020.co.uk
+

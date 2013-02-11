@@ -1,0 +1,254 @@
+Saturn PAR debugger ideas/White Paper blah de blah..
+
+(c) TyRaNiD 2000
+
+Premises:
+
+PAR has communication ability between pc and saturn. Uses a set of input and output 
+ports to transfer data, which idicates that it could be used directly to transfer data
+from saturn to PC debugger code.
+SH-2 has built in break controller to interrupt the processor at a set location, or
+for every instuction.
+
+How could this be used to create a debugger for home-brew software ?
+
+Defining what we want the debugger to perform.
+
+1. Stepping through code with full register display etc.
+2. Display memory data.
+3. At least assembler debugger if not source level if possible.
+4. Breakpoint setting into code block without having to step through code.
+5. Load program into memory and execute it.
+6. Modify a program in situe (i.e. while its running modify a register value or
+   a instuction.
+7. Allow a force break to jump back into program code to see what its doing..
+8. Support both master and slave proessor !!!
+
+How might this be done?
+
+UBC can break on address, instruction, data tranfer and others. Very Useful
+piece of kit (assumming that sega uses bog standard sh chips and not modified
+to remove the UBC !!).
+
+1. Stepping. Best way would be to write some custom rountines which trap both the
+UBC interrupt and also provide a non-interrupt function. These rountines added to a debug
+build of the home-brew code would initially setup the UBC to break on every instuction.
+When the intertupt gets called modify the stack to jump back not to the original instruction
+but to a custom handler which will communicate via the par to the pc. 
+
+Data required by the pc end.
+
+- Full register set
+- Current PC value of the break instruction.
+- Current instuction code (if not part of the home-brew code i.e. in BIOS or service
+rountines etc.)
+
+Code will then wait for pc to tell it to step the next instruction. Restores the original
+stack and does a return. Code should now resume and break on next instruction etc.
+
+The UBC is setup on address ranges so you would only include address ranged in the 
+home-brew code. By leaving them ouside it is possible to avoid nasty interrupt execptions
+etc which need to continue processing to work correctly. However some care is need to 
+move the communication code and the UBC interrupt routine outside the ranges so u dont 
+have to step through it all just to run one opcode.
+
+At this point you would modify the registers, any data etc. This routine should also 
+service all the debugger functions without going through the par code itself (no rom 
+replacement, should work on all variaties of the PAR).
+
+So flow of code
+
+Setup UBC to break at every instuction ->
+START CODE-> 
+UBC interrupt called->
+Modify Stack and return to custom communication routine->
+Sit in comm routine till PC instructs to execute next instruction->
+Execute instruction and go back to START CODE.
+
+2. When stepping through the code most of the time is spent sitting in the custom 
+routine so just build a command set for everything required. Can use the original 
+par protocols just extended to allow new fucntions.
+
+3. Current instruction (or even many instuctions) could be transfered to the PC side 
+at step (PC could do a data request on those areas itself). This is the only practical
+way of doing it. By using the cof and map outputs from the compiler it is theroretically 
+possible to do source level debugger (can anyone be arsed with that shit).
+
+4. SH2 has a second Break channel which could be set to an address itself for a setable
+breakpoint. Could be used to inspect data for a single loop of the program etc. Rest of the
+stepping solution applies.
+
+5. Already done in a way. PI's SFEX program performs this task and would not be greatly 
+different. Source is available so possible to use that or get PI in on the deal as well.
+
+6. Discussed previously. Whenever the PC has control of the saturn via the custom 
+communication routine by defining a command set you can do any task including modfying
+register values, data or anything else u desire.
+
+7. Allow force breakfrom PC while code is running directly. Very hard. However its likely 
+that the PAR uses some interupt rountine to call its code when data is transfered from the
+PC to it (its got to run sometime just to modify the memory for cheats etc.) By modifying
+the PAR's ROM code this could be possible. However doubt I want to start doing stuff like
+that.
+
+8. Same principle applies to both master and slave debugging. Would require two different
+procedures for interrupt and commnication rountines.
+
+Possible problems...
+
+Syncronisity. Problems of carefully synced code (and interrupt routines) causing problems
+cause they dont run in the correct cycle time. Not much can be done about this. Just have
+to hope it doesnt make a difference..
+
+Problems with the break address range encompassing communication code etc. This can
+possibly be solved by creating a bootstrap which is loaded at runtime and sets up the
+UBC etc. This would then wait for the PC to transfer the program to be run and starts
+it setting the correct address ranges etc. This might in fact be the optimum way to
+do the debugger as a whole. Its feasable that it could even debug commercial games as
+well but that would require writing code to boot a cd. (proably not a great problem
+read bootsectors and first read file and execute directly). However that would proably 
+require a larger bootstrap and thus could be a problem. 
+
+Code Size. Problems might arise from large code size of the communication routine etc, as
+the saturn only has a limited memory space. Size overhead could be reduced by shifting as
+much functionality to the pc side instead, and provide only a few basic service routines
+in the actual code (or maybe can even reuse pars code to do the same job?)
+
+
+So how to do actually do it
+---------------------------
+
+Code the UBC handler, bootloader, and the communciation system in sh2 assembler.
+Transfer code using PAR command 0x09 and excute code.
+
+Bootloader sets the UBC interrupt handler and waits for the program to be transfered
+from the pc commlink (equavalent of PARs command 0x09).
+
+Start program execution.
+
+On each UBC interrupt callback to custom comm handler in memory intead of back to the 
+instuction. Thats all it does. Maybe pushes register values onto stack for safe keeping ?
+
+Custom handler now sits there and accepts a new command set from the commlink,
+Commands required are:-
+
+1) Step instuction. Restores all registers and stack to original state before the exception
+and do a return (maybe has to be done manually, depends how the rte insruction works in
+relation to the rts i.e. full bra routine ?). Dont think can use a branch but its possible 
+that the rte has no major functionality in interrupt recognistion and so could be used as
+a non damaging stack return. Maybe ack occurs at int call and just SR I value prevent
+interrupt calls, so in theory at the end of the comm handler its possible to just do a rte
+and get away with it ?
+
+2) Memory dump. Gets a memory range and transmits to the pc.
+
+3) Memory write. Writes data sent by the pc to memory. Can be used for modiying instructions
+variables etc.
+
+4) Register dump. Sends the entire register values to the pc. pc has to modify the SP to
+give the correct value before the ubc intterupt was called (not very hard as it will be 
+know exactly how many bytes r placed on the stack up to the register dump). Original 
+SR value will be preserved in the stack as will the PC value. When the int starts save 
+all regs to the stack at once. This is then used to send to the pc and also to restore 
+everything to its original state before returning.
+
+5) Register Write. Modifes preserved regsiter values so when saturn is restarted it will
+change the restored register values.
+
+
+-= New Stuff =-
+
+Console I/O functions.
+
+These functions will allow u to do console I/O inside ur saturn program and display the
+results on a PC debugging console. Will allow Printf debugging to take place etc and
+also allow u to control the program flow on the saturn without actually coding such things
+as a pad etc. This must be accessable via both the debugger (a special console screen to 
+display messages etc) and also via a stand alone program (the saturn console :)
+
+Functions could incude
+
+assert          - Can break the debugger and also provide info to the pc (if not in dbg).
+printf		- Operates like normal printf except sends output to pc console 
+scanf		- Same as prinf except values taken from pc.
+puts		- Same again
+gets		
+putch
+getch
+openfile	- Open a file on the PC
+closefile	- Close
+readfile	- Read opened file from pc
+writefile	- Write to file on the pc
+fscanf
+fprintf     
+sendlong	- Send data words from saturn to PC
+sendword	
+sendbyte
+getlong		- Get data words from PC to saturn
+getword
+getbyte
+getc
+
+As the gcc compiler for the saturn adheres to the ansi c standard it is quite possible 
+to build these functions for the saturn with the data streamed to the pc interface instead.
+The only problem could be one of space taken by these functions.
+
+GFS CD emulation.
+
+The GFS library supplied by sega does not directly do any specific hardware functions
+when taken from a top level abstract view point, so in theory it could be emulated to
+read data from the pc which is using a pre defined raw cd image. However as these
+functions will adhere to the exact operation as the sega originals (just the data comes
+from somewhere else) it should in theory be possible to just relink the code with the
+original sega code and with an appropriate cd in the saturns drive could execute exactly
+the same. This would be an extremely useful addition to the debugging system as it would
+allow u to develop proper games etc which would run off a cd. It would also negate the
+need to compile files into the program itself which wastes memory which could be better 
+suited to a better program etc. It would be alot slower than a real cd and it would also
+not be able to play cd audio (well not quite true u could always emulate cd audio playing
+on the pc for reason best left, hardly worth it but possible none the less).
+
+-= How these operations could be done in practice =-
+
+From the work I have already done on the saturn it is clear to me there are quite a few
+easy ways to do this.
+
+First off the interface.
+
+This interface has to be compatible with the current debuggers operation and so the 
+interface is built around this as such.
+
+command interface :-
+
+When console function called set imask to 15. This stops the debugger tracing into 
+any of these special functions which may cause problems as u dont want the program
+changing the pars regs while the debugger is still using them.
+
+First off the debugger runs a syncronising routine with the saturn to ensure it is in
+the correct place of the code.
+
+In normal operation of the debugger in run and step mode it then calls a command to 
+recieve the current PC and PR register values. This is where i can put in the extra 
+code to spawn console functions. If say the saturn returns -1 (0xFFFFFFFF) in the PC
+field then as this is an invalid PC value (not the same with PR as that could just be
+a bogus value) it can be determined that a interface (or emulation) function is 
+required. The PR field could then be used to determine the exact function which is
+required to be processed. This gives a range of 2^32 which is more than needed.
+
+So depending on the command code recieved the pc could do any of the above functions
+as long as both the pc code and the saturn code adhere to the exact same format.
+
+For Console IO the saturn and the pc would only exchange data strings for the most part.
+So for instance to do scanf on the pc the saturn would issue a gets command to the pc
+and the pc would send back this string. The saturn would then internally parse the 
+args it requires and returns them to the saturn programming which called it.
+The reverse would be true for printf. The saturn would preprocess the string and send 
+that only to the pc. The pc wouldnt concern itself with the actual operations which
+are going to be performed on the string. 
+
+This all could lead to some very interesting programs. Almost any function could be 
+designed for the saturn and do some very wierd things (admittedly mostly usless and
+exercises in boredom). Just for instace u could write a console program on the saturn
+to do a networking functions such as ftping. While it would be quite slow it wouldnt
+be impossible. Or how about controlling ur pc via the saturn through a pad interface. 
+Silly things but amusing none the less :) Send ur silly ideas for how to use this to me...

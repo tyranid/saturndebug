@@ -1,0 +1,46 @@
+ENTRY(_entry)
+OUTPUT_FORMAT("coff-sh")
+OUTPUT_ARCH(sh)
+
+SECTIONS
+{
+        .text   0x06040000:
+	{
+		*(.text);
+		*(.strings);
+	}
+
+/* dummy section for alignment & for make symbol. */
+	.mdata	ALIGN(0x10) :
+	{
+		STARTOF_MR = .;
+	}
+
+	.data	ALIGN(0x10) : AT (ADDR(.mdata))
+	{
+		STARTOF_R = .;
+		*(.data);
+		SIZEOF_R	= . - STARTOF_R;
+		ENDOF_R	= .;
+	}
+
+	.tors	ALIGN(0x10) :
+	{
+		___ctors = . ;
+		*(.ctors)
+		___ctors_end = . ;
+		___dtors = . ;
+		*(.dtors)
+		___dtors_end = . ;
+	}
+
+	.bss	ALIGN(0x10) (NOLOAD):
+	{
+		STARTOF_B = .;
+		*(.bss);
+		*(COMMON);
+		SIZEOF_B	= . - STARTOF_B;
+		ENDOF_B	= .;
+		_end	= .;
+	}
+}
